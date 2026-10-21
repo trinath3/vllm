@@ -1156,13 +1156,20 @@ class MultiModalMixin(SupportsMultiModal, SupportsMRoPE, Base):
     ) -> dict[str, Any]:
         """Narrow the entries of `kwargs` that hold one row per item down to the item
         at `index`. Length is all there is to match on, so an unrelated entry of the
-        same length is narrowed too."""
-        return {
-            key: value[index : index + 1]
-            if isinstance(value, (torch.Tensor, list)) and len(value) == num_items
-            else value
-            for key, value in kwargs.items()
-        }
+        same length is narrowed too.
+
+        A list of tensors holds un-padded items without a batch dim, so the entry is
+        indexed and given one, like the primary input in the per-item loops. Slicing it
+        would hand HF a one-element list instead of a tensor."""
+        selected: dict[str, Any] = {}
+        for key, value in kwargs.items():
+            if not isinstance(value, (torch.Tensor, list)) or len(value) != num_items:
+                selected[key] = value
+            elif isinstance(value, list) and isinstance(value[index], torch.Tensor):
+                selected[key] = value[index].unsqueeze(0)
+            else:
+                selected[key] = value[index : index + 1]
+        return selected
 
     def _get_features(self, modality: str, pixel_values: torch.Tensor, **kwargs) -> Any:
         # grid_thw fields are registered keep_on_cpu; restore the on-device

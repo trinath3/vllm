@@ -784,3 +784,18 @@ def test_get_mrope_input_positions_omits_unsupported_grid_kwargs():
 
     assert positions.shape == (4, 3)
     assert delta == 0
+
+
+def test_select_item_kwargs_restores_batch_dim_of_list_entries():
+    """Un-padded per-item tensors must reach HF as a batch of one, not `[tensor]`."""
+    masks = [torch.ones(9600, dtype=torch.int32), torch.ones(2400, dtype=torch.int32)]
+    grid = torch.tensor([[1, 2, 2], [1, 4, 4]])
+    kwargs = {"padding_mask": masks, "grid": grid, "flag": True, "names": ["a", "b"]}
+
+    item = MultiModalMixin._select_item_kwargs(None, kwargs, 1, num_items=2)
+
+    assert isinstance(item["padding_mask"], torch.Tensor)
+    assert item["padding_mask"].shape == (1, 2400)
+    assert torch.equal(item["grid"], grid[1:2])
+    assert item["flag"] is True
+    assert item["names"] == ["b"]
